@@ -49,6 +49,8 @@
 
 #define STORAGE_PATH "/mnt/union/ROMS"
 #define OPTION_SKIP  "/tmp/skip_opt"
+#define EXPLORE_ARC_PATH "/tmp/arc_path"
+#define EXPLORE_ARC_CONTENT "/tmp/arc_content"
 
 #define OPT_PATH "/opt/muos/"
 #define RUN_PATH "/run/muos/"

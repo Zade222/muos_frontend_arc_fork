@@ -1,5 +1,6 @@
 #include "muxshare.h"
 #include "../common/skip_list.h"
+#include "../common/archive.h"
 
 static lv_obj_t *ui_imgSplash;
 static lv_obj_t *ui_viewport_objects[7];
@@ -11,6 +12,7 @@ static int exit_status = 0;
 static int sys_index = -1;
 static int file_count = 0;
 static int dir_count = 0;
+static int arc_count = 0;
 static int starter_image = 0;
 static int splash_valid = 0;
 static int nogrid_file_exists = 0;
@@ -161,9 +163,10 @@ static void image_refresh(char *image_type) {
     }
 }
 
-static void add_directory_and_file_names(const char *base_dir, char ***dir_names, char ***file_names) {
+static void add_directory_and_file_names(const char *base_dir, char ***dir_names, char ***file_names, char ***arc_names,) {
     file_count = 0;
     dir_count = 0;
+    arc_count = 0;
     struct dirent *entry;
     DIR *dir = opendir(base_dir);
 
@@ -196,6 +199,17 @@ static void add_directory_and_file_names(const char *base_dir, char ***dir_names
                 *file_names = (char **) realloc(*file_names, (file_count + 1) * sizeof(char *));
                 (*file_names)[file_count] = file_path;
                 (file_count)++;
+            } else {
+                const ArchiveHandler *handler = get_archive_handler(entry->d_name);
+                if (handler != NULL) {
+                    char *arc_path = (char *) malloc(strlen(entry->d_name) + 2);
+                    snprintf(arc_path, strlen(entry->d_name) + 2, "%s", entry->d_name);
+
+                    *arc_names = (char **) realloc(*arc_names, (arc_count + 1) * sizeof(char *));
+                    (*arc_names)[arc_count] = arc_path;
+
+                    (arc_count)++;
+                }
             }
         }
     }
@@ -390,7 +404,8 @@ static void create_content_items(void) {
 
     char **dir_names = NULL;
     char **file_names = NULL;
-    add_directory_and_file_names(item_curr_dir, &dir_names, &file_names);
+    char **arc_names = NULL;
+    add_directory_and_file_names(item_curr_dir, &dir_names, &file_names, &arc_names);
 
     int fn_valid = 0;
     struct json fn_json = {0};
@@ -418,7 +433,7 @@ static void create_content_items(void) {
 
     update_title(item_curr_dir, fn_valid, fn_json, lang.MUXPLORE.TITLE, STORAGE_PATH);
 
-    if (dir_count > 0 || file_count > 0) {
+    if (dir_count > 0 || file_count > 0 || arc_count > 0) {
         for (int i = 0; i < dir_count; i++) {
             char *friendly_folder_name = get_friendly_folder_name(dir_names[i], fn_valid, fn_json);
 
@@ -438,6 +453,13 @@ static void create_content_items(void) {
 
             free(dir_names[i]);
             free(friendly_folder_name);
+        }
+
+        for (int i = 0; i< arc_count; i++) {
+            content_item *new_item = add_item(&items, &item_count, arc_names[i], arc_names[i], "", ARCHIVE);
+            new_item->glyph_icon = "archive"; //subject to change
+            adjust_visual_label(new_item->display_name, config.VISUAL.NAME, config.VISUAL.DASH);
+            free(arc_names[i]);
         }
 
         sort_items(items, item_count);
@@ -460,6 +482,7 @@ static void create_content_items(void) {
 
         free(file_names);
         free(dir_names);
+        free(arc_names);
     }
 }
 
@@ -593,11 +616,124 @@ static void process_load(int from_start) {
     if (items[current_item_index].content_type == FOLDER) {
         load_message = 1;
 
-        char n_dir[MAX_BUFFER_SIZE];
+        char n_dir[MAX_BUFFER_SIZE]; 
         snprintf(n_dir, sizeof(n_dir), "%s/%s",
                  sys_dir, items[current_item_index].name);
 
         write_text_to_file(EXPLORE_DIR, "w", CHAR, n_dir);
+        load_mux("explore");
+    } else if (items[current_item_index].content_type == ARCHIVE) {
+        load_message = 1;
+        char arc_path[PATH_MAX];
+
+        snprintf(arc_path, sizeof(arc_path), "%s/%s", 
+            sys_dir, items[current_item_index].name);
+
+        const ArchiveHandler *handler = get_archive_handler(
+            items[current_item_index].name
+        );
+
+        if (!handler) { 
+            toast_message("Archive type is unsupported.", SHORT);
+            return; 
+        }
+        char **file_list = NULL;
+        int file_count = 0;
+
+
+        switch (handler->type){
+            case HANDLER_TYPE_COMMAND: {
+                const char *list_cmd - get_list_cmd(arc_path);
+
+                const char *json_output = get_execute_result(list_cmd);
+
+                struct json parsed = {0};
+                if (json_valid(json_output)){
+                    parsed = json_parse(json_output);
+                } else {
+                    //Handle error
+                }
+
+                if (json_type(parsed) == JSON_ARRAY) 
+                {
+                    int count = json_array_count(parsed);
+                    file_count = count;
+
+                    items = malloc(count * sizeof(content_item));
+                    if (!items) {
+                        /* todo, handle malloc error/failure */
+                    }
+
+                    for (int i = 0; i < count; i++) {
+                        struct json item = json_array_get(parsed, i);
+
+                        struct json filename_json = json_object_get(
+                            item, 
+                            "filename"
+                        );
+                        struct json index_json = json_object_get(
+                            item, 
+                            "index"
+                        );
+                        struct json size_json = json_object_get(
+                            item, 
+                            "size(bytes)"
+                        );
+
+                        char filename[MAX_BUFFER_SIZE];
+
+                        json_string_copy(
+                            filename_json, 
+                            filename, 
+                            sizeof(filename)
+                        );
+
+                        int archive_idx = json_int(index_json);
+                        uint64_t size_bytes = json_uint64(size_json);
+
+                        items[i].name = strdup(filename);
+                        /*Friendly name logic is specifically not being used
+                        here so the user can differentiate between the variant
+                        files in the archive.*/
+                        items[i].display_name = strdup(filename);
+                        items[i].content_type = ITEM;
+                        items[i].glyph_icon = strdup(
+                            get_content_explorer_glyph_name(filename)
+                        );
+                        items[i].use_module = strdup(mux_module);
+
+                        //Archive specific info
+                        items[i].archive_index = archive_idx;
+                        items[i].file_size = size_bytes;
+                    }
+
+                    sort_items(items, file_count);
+                } else {
+                    //Write error to log?
+                    toast_message("Failed to read archive contents.", SHORT);
+                }
+
+                free((void*)json_output);
+
+                break;
+            }
+            case HANDLER_TYPE_LIBRARY: {
+                file_list = handler->interface.library.list_files(
+                    arc_path, 
+                    &file_count
+                );
+                break;
+            }
+        }
+
+        write_text_to_file(EXPLORE_ARC_CONTENT, "w", CHAR, json_output);
+        write_text_to_file(EXPLORE_ARC_PATH, "w", CHAR, arc_path);
+
+        
+        
+        close_input();
+        mux_input_stop();
+        return;
     } else {
         write_text_to_file(MUOS_IDX_LOAD, "w", INT, current_item_index);
 
@@ -855,6 +991,13 @@ int muxplore_main(int index, char *dir) {
     starter_image = 0;
     splash_valid = 0;
     nogrid_file_exists = 0;
+
+    bool in_archive_mode = file_exist(EXPLORE_ARC_PATH);
+
+    if (in_archive_mode) {
+        char *archive_path = read_all_char_from(EXPLORE_ARC_PATH);
+
+    }
 
     snprintf(sys_dir, sizeof(sys_dir), "%s", (strcmp(dir, "") == 0) ? STORAGE_PATH : dir);
     sys_index = index;

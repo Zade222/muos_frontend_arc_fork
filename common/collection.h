@@ -17,6 +17,8 @@ typedef struct {
     char *help;
     char *glyph_icon;
     char *use_module;
+    uint64_t file_size;
+    int archive_index;
 } content_item;
 
 content_item *add_item(content_item **content_items, size_t *count, const char *name, const char *sort_name,

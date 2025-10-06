@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL_mixer.h>
+#include "/home/tyler/Downloads/aarch64-buildroot-linux-gnu_sdk-buildroot/aarch64-buildroot-linux-gnu/sysroot/usr/include/SDL2/SDL_mixer.h"
 #include "../lvgl/lvgl.h"
 #include "mini/mini.h"
 #include "options.h"
