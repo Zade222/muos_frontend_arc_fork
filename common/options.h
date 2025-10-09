@@ -27,6 +27,7 @@
 #define TIMER_BATTERY   4096
 #define TIMER_REFRESH   IDLE_MS
 #define TIMER_SYSINFO   1024
+#define MAX_ARCHIVE_ITEMS 1000
 
 #define TIME_STRING_12 "%I:%M %p"
 #define TIME_STRING_24 "%H:%M"
@@ -50,6 +51,7 @@
 #define STORAGE_PATH "/mnt/union/ROMS"
 #define OPTION_SKIP  "/tmp/skip_opt"
 #define EXPLORE_ARC_PATH "/tmp/arc_path"
+#define EXPLORE_ARC_INTERNAL_PATH "/tmp/arc_int_path"
 #define EXPLORE_ARC_CONTENT "/tmp/arc_content"
 
 #define OPT_PATH "/opt/muos/"

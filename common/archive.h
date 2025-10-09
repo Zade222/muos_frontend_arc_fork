@@ -8,13 +8,14 @@ typedef enum {
 typedef struct {
     const char *root_path;// Path to the array if nested (e.g., "files"), or NULL
     const char *filename_key;
-    const char *index_key;
+    const char *identifier_key;
     const char *size_key;
 } JsonKeyMap;
 
 typedef union {
     //For a format that will use binary command integration
     struct {
+        const char *tool_command;
         const char *list_command;
         const char *extract_command;
         JsonKeyMap key_map;
@@ -46,3 +47,12 @@ typedef struct {
 const ArchiveHandler* get_archive_handler(const char *filename);
 
 char* get_list_cmd(const char *filename);
+
+char* parse_archive_json(const char *exec_result, const JsonKeyMap *map);
+
+char* construct_extract_cmd(
+    const ArchiveHandler *handler, 
+    const char *archive_path,
+    const char *file_identifier,
+    const char *output_path
+);

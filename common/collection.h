@@ -5,7 +5,8 @@
 typedef enum {
     MENU,
     FOLDER,
-    ITEM
+    ITEM,
+    ARCHIVE
 } content_type;
 
 typedef struct {
@@ -18,7 +19,7 @@ typedef struct {
     char *glyph_icon;
     char *use_module;
     uint64_t file_size;
-    int archive_index;
+    char *archive_identifier;
 } content_item;
 
 content_item *add_item(content_item **content_items, size_t *count, const char *name, const char *sort_name,
